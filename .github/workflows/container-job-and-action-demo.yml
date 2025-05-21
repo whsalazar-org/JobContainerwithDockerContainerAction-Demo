@@ -1,0 +1,79 @@
+# Workflow demonstrating a job running in a container
+# and a step within that job calling a Docker container action.
+
+name: Container Job and Docker Action Demo
+
+on:
+  push:
+    branches:
+      - main # Or your preferred branch
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  job_in_container:
+    name: Job Running in a Container
+    runs-on: ubuntu-latest # The runner hosts the container
+
+    # Define the container for the job's steps
+    # All steps in this job (except uses actions/checkout@vX if it runs on the host)
+    # will execute inside this container.
+    container:
+      image: node:18-alpine # Example: Using a Node.js Alpine image
+      # You can also specify:
+      # env:
+      #   NODE_ENV: development
+      # ports:
+      #   - 80
+      # volumes:
+      #   - my_docker_volume:/volume_mount
+      # options: --cpus 1
+
+    steps:
+      - name: 1. Checkout code
+        uses: actions/checkout@v4
+        # This action typically runs on the runner host to checkout files
+        # into the workspace, which is then mounted into the job container.
+
+      - name: 2. Show Node.js version (from job container)
+        run: |
+          echo "Running in a container based on image: node:18-alpine (or as specified above)"
+          echo "Node.js version:"
+          node --version
+          echo "npm version:"
+          npm --version
+          echo "Who am I running as?"
+          whoami
+          echo "Filesystem root listing:"
+          ls -la /
+
+      - name: 3. Run a Docker Container Action
+        id: hello_docker_action
+        # This uses a pre-built Docker container action.
+        # GitHub Actions will pull and run this action's container.
+        # Even though the job itself is in a container, this action
+        # will run in its own separate container defined by the action.
+        uses: actions/hello-world-docker-action@v2
+        with:
+          who-to-greet: 'Docker Action User (whsalazar)'
+
+      - name: 4. Output from Docker Container Action
+        run: |
+          echo "The Docker container action said: ${{ steps.hello_docker_action.outputs.time }}"
+          echo "The greeting was: ${{ steps.hello_docker_action.outputs.greeting }}" # Example custom output if action provided it
+
+      - name: 5. Another command in the job container
+        run: |
+          echo "This command is also running inside the job's primary container (node:18-alpine)."
+          echo "Verifying environment..."
+          apk update && apk add --no-cache curl # Example: using apk from alpine
+          curl --version
+
+# Example of a job NOT running in a container, for comparison
+# job_on_runner:
+#   name: Job Running Directly on Runner
+#   runs-on: ubuntu-latest
+#   steps:
+#     - name: Show OS version (from runner)
+#       run: |
+#         echo "Running directly on the runner"
+#         lsb_release -a
